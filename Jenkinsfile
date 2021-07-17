@@ -9,9 +9,35 @@ pipeline {
         archiveArtifacts artifacts: 'dist/trainSchedule.zip' // this is actually another step. archives .zip
       }
     }
+    stage('Build Docker Image') {
+        when {
+            branch 'deploy/containerised-app'
+        }
+        steps {
+            script {
+                app = docker.build("aleon1220/train-schedule")
+                app.inside {
+                    sh 'echo $(curl localhost:8080)'
+                }
+            }
+        }
+    }
+    stage('Push Docker Image') {
+        when {
+            branch 'deploy/containerised-app'
+        }
+        steps {
+            script {
+                docker.withRegistry('https://registry.hub.docker.com', 'docker_hub_login') {
+                    app.push("${env.BUILD_NUMBER}")
+                    app.push("latest")
+                }
+            }
+        }
+    }
     stage('Notify next Steps') {
         steps {
-            echo 'The pipeline will deploy to 2 different environments'
+            echo 'The pipeline will deploy to Staging and Production'
             echo 'Deploying to Staging'
             echo 'Deploying to Production'
         }
@@ -48,7 +74,7 @@ pipeline {
     } // end of stage
     stage('DeployToProduction') {
         when {
-            branch 'master'
+            branch 'deploy/*'
         }
         steps {
             input 'Is the Staging environment OK?'
